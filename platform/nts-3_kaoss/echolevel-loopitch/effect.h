@@ -35,7 +35,11 @@
 /*
  *  File: effect.h
  *
- *  
+ *  echolevel-loopitch
+ * 
+ *  Pitch adjustable looper effect for Korg NTS-3 Kaoss Pad
+ * 
+*   https://github.com/echolevel/logue-sdk/tree/master/platform/nts-3_kaoss/echolevel-loopitch
  *
  */
 
@@ -56,7 +60,6 @@
 
 // WARNING - never use fewer than 2 grains (div zero risk)
 #define MAX_GRAINS 8
-#define CROSSFADE_LENGTH 20  // Number of samples to fade
 
 // === Globals (static) ===
 static uint32_t bufferWritePos = 0;
@@ -119,7 +122,8 @@ class Effect {
     uint32_t param5{1};
     float param6{0.f};
 
-    void reset() {
+    void reset() 
+    {
       param1 = 0.f;
       param2 = 0.f;
       depth = 0.f;
@@ -303,8 +307,8 @@ class Effect {
         grains[i].loopLength = bufferLength;
         grains[i].readPos = grains[i].startOffset;
         grains[i].speed = playbackSpeedL;
-        //grains[i].pan = fast_randf(-1.0f, 1.0f);
-        grains[i].pan = -1.0f + 2.0f * (float)i / (MAX_GRAINS - 1);  // Evenly spaced from -1 to +1
+        grains[i].pan = fast_randf(-1.0f, 1.0f);
+        //grains[i].pan = -1.0f + 2.0f * (float)i / (MAX_GRAINS - 1);  // Evenly spaced from -1 to +1
       }
     }
 
@@ -316,11 +320,9 @@ class Effect {
       }
     }
     
-    
- 
 
-
-    for (; out_p != out_e; in_p += 2, out_p += 2) {
+    for (; out_p != out_e; in_p += 2, out_p += 2) 
+    {
       // Process samples here      
 
       float outL = in_p[0];
@@ -335,8 +337,10 @@ class Effect {
       
       if (touchEngaged && isPlaying && bufferLength > 1) {
         
-        if (grainModeEnabled) {
-          for (int i = 0; i < MAX_GRAINS; ++i) {
+        if (grainModeEnabled) 
+        {
+          for (int i = 0; i < MAX_GRAINS; ++i) 
+          {
               Grain* g = &grains[i];
        
               float readPos = g->readPos;
@@ -371,27 +375,29 @@ class Effect {
               bool wrapped = false;
        
               g->readPos += g->speed;
-              if (g->readPos >= g->startOffset + g->loopLength) {
+              if (g->readPos >= g->startOffset + g->loopLength) 
+              {
                   g->readPos -= g->loopLength;
                   wrapped = true;
-              } else if (g->readPos < g->startOffset) {
+              } else if (g->readPos < g->startOffset) 
+              {
                   g->readPos += g->loopLength;
                   wrapped = true;
               }
        
               // Randomise read positions and loop length on wrap
-              if (wrapped && bufferLength > 1) {
+              if (wrapped && bufferLength > 1) 
+              {
                 g->loopLength = fast_rand_u32_range((int)bufferLength / 2.0f, bufferLength);
-                if (g->loopLength < 16.f) {
+                if (g->loopLength < 16.f) 
+                {
                     g->loopLength = 16.f;
                 }
                 g->readPos = fast_randf(0.0f, g->loopLength - 4.f);
               }
 
               if(shouldRandomise)
-              {
-                
-
+              {                
                 // Drift controls speed randomisation range
                 g->speed += fast_randf(0.0f - drift, drift);
               }                            
@@ -408,7 +414,8 @@ class Effect {
           int indexBR = (indexAR + 1) % bufferLength;
       
           // If the buffer length is zero, reset read position to a safe state
-          if (bufferLength == 0) {
+          if (bufferLength == 0) 
+          {
             bufferReadPosL = 0.0f;
             bufferReadPosR = 0.0f;
           }
@@ -486,7 +493,7 @@ class Effect {
       out_p[0] = outL;
       out_p[1] = outR;      
       
-    }
+    } // main sample processing loop ends
     
 
   }
@@ -587,17 +594,18 @@ class Effect {
       "TOUCH",      
     };
     
-    switch (index) {
-    case PITCHMODE:
-      if (value >= PARAM4_VALUE0 && value < NUM_PARAM4_VALUES)
-        return param4_strings[value];
-      break;
-    case PLAYMODE:
-      if (value >= PARAM5_VALUE0 && value < NUM_PARAM5_VALUES)
-        return param5_strings[value];
-      break;
-    default:
-      break;
+    switch (index) 
+    {
+      case PITCHMODE:
+        if (value >= PARAM4_VALUE0 && value < NUM_PARAM4_VALUES)
+          return param4_strings[value];
+        break;
+      case PLAYMODE:
+        if (value >= PARAM5_VALUE0 && value < NUM_PARAM5_VALUES)
+          return param5_strings[value];
+        break;
+      default:
+        break;
     }
     
     return nullptr;
@@ -621,35 +629,36 @@ class Effect {
     (void)x;
     (void)y;
     
-    switch (phase) {
-    case k_unit_touch_phase_began:
-      // Only randomise L/R playheads if recording is started in the upper-right two thirds of the touchpad
-      shouldRandomise = (x >= 341) && (y >= 512);
-      // Only enable granular if recording is started in the upper-right one third of the touchpad
-      if((x >= 682) && (y >= 512))
-      {
-        grainModeEnabled = true;
-      }
-      // Only disable grain mode if one of the other modes was initiated (so the lower half can be 
-      // repeatedly touched for pitch changes without disabling grain mode)
-      if((x < 682) && (y >= 512))
-      {
-        grainModeEnabled = false;
-      }
-      touchEngaged = true;
-      break;
-    case k_unit_touch_phase_moved:
-      break;
-    case k_unit_touch_phase_ended:
-      touchEngaged = false;
-      break;  
-    case k_unit_touch_phase_stationary:
-      break;
-    case k_unit_touch_phase_cancelled:
-      touchEngaged = false;
-      break; 
-    default:
-      break;
+    switch (phase) 
+    {
+      case k_unit_touch_phase_began:
+        // Only randomise L/R playheads if recording is started in the upper-right two thirds of the touchpad
+        shouldRandomise = (x >= 341) && (y >= 512);
+        // Only enable granular if recording is started in the upper-right one third of the touchpad
+        if((x >= 682) && (y >= 512))
+        {
+          grainModeEnabled = true;
+        }
+        // Only disable grain mode if one of the other modes was initiated (so the lower half can be 
+        // repeatedly touched for pitch changes without disabling grain mode)
+        if((x < 682) && (y >= 512))
+        {
+          grainModeEnabled = false;
+        }
+        touchEngaged = true;
+        break;
+      case k_unit_touch_phase_moved:
+        break;
+      case k_unit_touch_phase_ended:
+        touchEngaged = false;
+        break;  
+      case k_unit_touch_phase_stationary:
+        break;
+      case k_unit_touch_phase_cancelled:
+        touchEngaged = false;
+        break; 
+      default:
+        break;
     }
   }
   
