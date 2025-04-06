@@ -1,10 +1,17 @@
 # echolevel-loopitch
  Pitch adjustable looper effect for Korg NTS-3 Kaoss Pad
 
+## Build
+Set up Docker environment as detailed in logue-sdk docs. From logue-sdk env command line, run 
+
+`build -f nts-3_kaoss/echolevel-loopitch` 
+
+to force a clean then build __echolevel_loopitch.nts3unit__.
+
 ## Install
 
 Connect to the NTS-3 Kaoss Pad via USB and the Korg Kontrol Editor. Go to Generic FX then drag and drop 
-`echolevel_loopitch.nts3unit` onto a slot. Now you can select it as one of the 4 effects in a Program. 
+__echolevel_loopitch.nts3unit__ onto a slot. Now you can select it as one of the 4 effects in a Program. 
 
 ## Use
 
@@ -15,8 +22,8 @@ Slide to the bottom half of the pad to start playback, then drag left or right t
 Depending on which 3rd of the pad's top half you initially press (left, middle or right), the playback mode will be:
 
 * 'Normal' - left and right stereo channels both playing at a synchronised rate from identical buffer offsets. Use this mode to resample back to a vintage sampler which lacks the ability to resample internally.
-* 'Stereo Drift' - the Drift parameter controls the amount by which left and right channels are semi-randomly offset and rate adjusted to give a wide, unpredictable, slightly glitchy effect.
-* 'Grain Drift' - 8 grains are initialised to give a crude semblance of granular synthesis; similar to Stereo Drift but the grains' pan is spread evenly across the stereo field and each stereo grain (as opposed to individual channels) has its loop points and starting offsets semi-randomised as well as its rate relative to the current touch control pitch.
+* 'Grain Drift' - the Drift parameter controls the amount by which left and right channels are semi-randomly offset and rate adjusted to give a wide, unpredictable, slightly glitchy effect; and the number of granular voices is controlled by the FX Depth fader from 2 to 24. If the voice count is 2, the grains are hard-panned left and right. For higher counts, panning is distributed evenly across the stereo field. Starting offsets and loop points within each grain are also randomised per loop.
+* 'Grain Octave Drift' - as above, except each grain has a 50% chance of being played an octave above or below the current playback centre pitch.
 
 Pitch modes are as follows:
 * Continuous pitch - the full resolution of the X/Y pad is used to gradually adjust the sample playback rate and thus the speed/pitch of the output

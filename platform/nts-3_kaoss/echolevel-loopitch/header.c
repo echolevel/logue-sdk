@@ -63,7 +63,7 @@ const __unit_header genericfx_unit_header_t unit_header = {
       {0, 1023, 0, 0, k_unit_param_type_none, 0, 0, 0, {"PARAM2"}},
       
       // Example of a parameter with negative values and one fractional digit (base 10), using the drywet display type 
-      {-1000, 1000, 0, 0, k_unit_param_type_drywet, 1, 1, 0, {"DEPTH"}},
+      {0, 1000, 0, 0, k_unit_param_type_none, 0, 0, 0, {"DEPTH"}},
 
       // Example of a strings type parameter
       {0, 3, 0, 1, k_unit_param_type_strings, 0, 0, 0, {"PITCHMODE"}},
@@ -88,7 +88,7 @@ const __unit_header genericfx_unit_header_t unit_header = {
     {k_genericfx_param_assign_y, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 256},
 
     // DEPTH mapped full range to depth control, with a bipolar exponential curve and i initialized at 0
-    {k_genericfx_param_assign_depth, k_genericfx_curve_exp, k_genericfx_curve_bipolar, -1000, 1000, 0},
+    {k_genericfx_param_assign_depth, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1000, 10},
 
     // PARAM4 set to the fixed value of 1
     {k_genericfx_param_assign_none, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 3, 1},

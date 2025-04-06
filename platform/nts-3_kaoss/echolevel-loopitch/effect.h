@@ -59,21 +59,20 @@
 #define CLAMP(val, minval, maxval) (MAX((minval), MIN((val), (maxval))))
 
 // WARNING - never use fewer than 2 grains (div zero risk)
-#define MAX_GRAINS 8
+#define MAX_GRAINS 24
 
 // === Globals (static) ===
 static uint32_t bufferWritePos = 0;
-static float bufferReadPosL = 0.0f;
-static float bufferReadPosR = 0.0f;
+static float bufferReadPos = 0.0f;
 static uint32_t bufferLength = 0;
-static uint32_t bufferLengthL = 0;
-static uint32_t bufferLengthR = 0;
 
 static int isRecording = 0;
 static int isPlaying = 0;
 static bool shouldRandomise = false;
 static bool touchEngaged = false;
 static bool grainModeEnabled = true;
+static int voices = 2; // never let this go below 2!
+static float grainMixGain = 1.0f / sqrtf((float)voices); // recalc when voice count changes
 
 uint32_t rng_state = 123456789; // Seed — can be anything
 
@@ -253,15 +252,17 @@ class Effect {
       case 0: touchEngaged = true; break;
     }
 
-    const float drift = params_.param6 / 1000.0f;
+    const float drift = params_.param6 / 10000.0f;
+    
+    voices = CLAMP((int)(params_.depth * MAX_GRAINS), 2, MAX_GRAINS);
+    grainMixGain = 1.0f / sqrtf((float)voices);
 
     // Get mode and playback speed from params
     const float x = params_.param1; // X-axis
     const float y = params_.param2; // Y-axis
 
     // Default: continuous pitch control
-    float playbackSpeedL = fastpowf(2.0f, (x - 0.5f) * 4.0f);
-    float playbackSpeedR = playbackSpeedL;
+    float playbackSpeed = fastpowf(2.0f, (x - 0.5f) * 4.0f);
 
     if (semitone_range > 0)
     {
@@ -276,8 +277,7 @@ class Effect {
       int semitoneOffset = step - semitone_range; // Range from -12 to +12
 
       // Apply the semitone offset to calculate playback speed
-      playbackSpeedL = powf(2.0f, semitoneOffset / 12.0f); // Use 12 for semitone increments
-      playbackSpeedR = playbackSpeedL;
+      playbackSpeed = powf(2.0f, semitoneOffset / 12.0f); // Use 12 for semitone increments
     }
 
     const bool shouldRecord = (y > 0.5f);
@@ -293,31 +293,21 @@ class Effect {
     } 
     else if (shouldPlay && !isPlaying) 
     {
-      bufferReadPosL = 0.0f;
-      bufferReadPosR = 0.0f;
-      bufferLengthL = bufferLength;
-      bufferLengthR = bufferLength;
+      bufferReadPos = 0.0f;
       isPlaying = 1;
       isRecording = 0;      
  
       // init grains
-      for(int i = 0; i < MAX_GRAINS; i++)
+      int voicecount = CLAMP(voices, 2, MAX_GRAINS);
+      for(int i = 0; i < voicecount; i++)
       {
         grains[i].startOffset = 0.f;
         grains[i].loopLength = bufferLength;
         grains[i].readPos = grains[i].startOffset;
-        grains[i].speed = playbackSpeedL;
-        grains[i].pan = fast_randf(-1.0f, 1.0f);
-        //grains[i].pan = -1.0f + 2.0f * (float)i / (MAX_GRAINS - 1);  // Evenly spaced from -1 to +1
+        grains[i].speed = playbackSpeed;
+        //grains[i].pan = fast_randf(-1.0f, 1.0f);        
       }
-    }
-
-    else if (isPlaying)
-    {
-      for(int i = 0; i < MAX_GRAINS; i++)
-      {
-        grains[i].speed = playbackSpeedL;
-      }
+      updateGrainPanning();
     }
     
 
@@ -339,13 +329,15 @@ class Effect {
         
         if (grainModeEnabled) 
         {
-          for (int i = 0; i < MAX_GRAINS; ++i) 
+          
+          int voicecount = CLAMP(voices, 2, MAX_GRAINS);
+          for (int i = 0; i < voicecount; ++i) 
           {
               Grain* g = &grains[i];
        
               float readPos = g->readPos;
-              int indexA = (int)floorf(readPos);
-              int indexB = (indexA + 1) % bufferLength;
+              int indexA = CLAMP((int)floorf(readPos), 0, bufferLength - 2);
+              int indexB = indexA + 1; // guaranteed safe since indexA <= bufferLength - 2
        
               // Sample interpolation for both channels
               float sA_L = allocated_buffer_[indexA * 2];
@@ -366,8 +358,8 @@ class Effect {
               float gainR = sinf(pan * M_PI_2);  // Right channel gain
        
               // Apply panning to the mono grain mix
-              outL += grainMono * gainL * ((1.0f / MAX_GRAINS) * (MAX_GRAINS / 2.0f));
-              outR += grainMono * gainR * ((1.0f / MAX_GRAINS) * (MAX_GRAINS / 2.0f));
+              outL += grainMono * gainL * grainMixGain;
+              outR += grainMono * gainR * grainMixGain;
        
               // Update read position and apply wrapping logic
               g->readPos = MIN(MAX(g->readPos, 0.0f), (float)(bufferLength - 1));
@@ -388,36 +380,46 @@ class Effect {
               // Randomise read positions and loop length on wrap
               if (wrapped && bufferLength > 1) 
               {
-                g->loopLength = fast_rand_u32_range((int)bufferLength / 2.0f, bufferLength);
-                if (g->loopLength < 16.f) 
-                {
-                    g->loopLength = 16.f;
-                }
-                g->readPos = fast_randf(0.0f, g->loopLength - 4.f);
-              }
+                  g->loopLength = fast_rand_u32_range(24.0f, bufferLength);
+                  if (g->loopLength < 16.f) 
+                      g->loopLength = 16.f;
 
-              if(shouldRandomise)
-              {                
-                // Drift controls speed randomisation range
-                g->speed += fast_randf(0.0f - drift, drift);
-              }                            
-       
+                  g->readPos = fast_randf(0.0f, g->loopLength - 4.f);
+
+                  // Reset to base speed
+                  float baseSpeed = playbackSpeed;
+
+                  if(shouldRandomise)
+                  {
+                    // Randomly apply octave shift
+                    float octaveChance = fast_randf(0.0f, 1.0f);
+                    if (octaveChance < 0.25f) {
+                        baseSpeed *= 0.5f; // octave down
+                    } else if (octaveChance > 0.75f) {
+                        baseSpeed *= 2.0f; // octave up
+                    }
+                  }
+                  
+
+                  g->speed = baseSpeed += fast_randf(0.0f - drift, drift);
+              }       
               
           }
         }
         else
         {
-          int indexAL = (int)floorf(bufferReadPosL);
+          // Simple stereo playback of recorded input at desired playback rate
+
+          int indexAL = (int)floorf(bufferReadPos);
           int indexBL = (indexAL + 1) % bufferLength;
 
-          int indexAR = (int)floorf(bufferReadPosR);
+          int indexAR = (int)floorf(bufferReadPos);
           int indexBR = (indexAR + 1) % bufferLength;
       
           // If the buffer length is zero, reset read position to a safe state
           if (bufferLength == 0) 
           {
-            bufferReadPosL = 0.0f;
-            bufferReadPosR = 0.0f;
+            bufferReadPos = 0.0f;
           }
 
           float sAL = allocated_buffer_[indexAL * 2];
@@ -425,8 +427,8 @@ class Effect {
           float sBL = allocated_buffer_[indexBL * 2];
           float sBR = allocated_buffer_[indexBR * 2 + 1];
       
-          float fracL = bufferReadPosL - (float)indexAL;
-          float fracR = bufferReadPosR - (float)indexAR;
+          float fracL = bufferReadPos - (float)indexAL;
+          float fracR = bufferReadPos - (float)indexAR;
           float interpL = fracL * (sBL - sAL);
           float interpR = fracR * (sBR - sAR);
           // Mixes live input with sample playback - defeat with 'MUTE' button on hardware
@@ -436,66 +438,47 @@ class Effect {
           // Ensure bufferLength is always valid (clamp it)
           bufferLength = MIN((float)bufferLength, (float)BUFFER_LENGTH);
 
-          // Clamp sub-loop length bounds
-          bufferLengthL = MIN(bufferLengthL, bufferLength);
-          bufferLengthR = MIN(bufferLengthR, bufferLength);
+          bool wrapped = false;
 
-          bool wrappedL = false;
-          bool wrappedR = false;
+          bufferReadPos += playbackSpeed;
 
-          bufferReadPosL += playbackSpeedL;
-          if (bufferReadPosL >= bufferLengthL) 
+          if(bufferReadPos >= bufferLength)
           {
-            bufferReadPosL -= bufferLengthL;
-            wrappedL = true;
+            bufferReadPos -= bufferLength;
+            wrapped = true;
           }
-          else if (bufferReadPosL < 0.0f) 
+          else if (bufferReadPos < 0.0f)
           {
-            bufferReadPosL += bufferLengthL;
-            wrappedL = true;
-          }
-
-          bufferReadPosR += playbackSpeedR;
-          if (bufferReadPosR >= bufferLengthR) 
-          {
-            bufferReadPosR -= bufferLengthR;
-            wrappedR = true;
-          }
-          else if (bufferReadPosR < 0.0f) 
-          {
-            bufferReadPosR += bufferLengthR;
-            wrappedR = true;
-          }
-
-          if(shouldRandomise)
-          {
-            // Only randomise read position on wrap
-            if (wrappedL && bufferLength > 1) 
-            {
-              bufferLengthL = fast_rand_u32_range(4, bufferLength);
-              bufferReadPosL = fast_randf(0.0f, (float)bufferLength);
-            }
-            if (wrappedR && bufferLength > 1) 
-            {
-              bufferLengthR = fast_rand_u32_range(4, bufferLength);
-              bufferReadPosR = fast_randf(0.0f, (float)bufferLength);
-            }
-
-            // Drift controls speed randomisation range
-            playbackSpeedL += fast_randf(0.0f - drift, drift);
-            playbackSpeedR += fast_randf(0.0f - drift, drift);
+            bufferReadPos += bufferLength;
+            wrapped = true;
           }
 
         } // if grainenabled ends
           
       }
 
-      out_p[0] = outL;
-      out_p[1] = outR;      
+      out_p[0] = CLAMP(outL, -1.0f, 1.0f);
+      out_p[1] = CLAMP(outR, -1.0f, 1.0f);      
       
     } // main sample processing loop ends
     
 
+  }
+
+  inline void updateGrainPanning()
+  {
+    int voicecount = CLAMP(voices, 2, MAX_GRAINS);
+    for(int i = 0; i < voicecount; i++)
+    {
+      if (voicecount == 2) 
+        {
+          grains[i].pan = (i == 0) ? -1.0f : 1.0f;  // hard left/right
+        } else 
+        {
+          grains[i].pan = -1.0f + 2.0f * (float)i / (voicecount - 1); // evenly spread
+          //grains[i].pan = fast_randf(-1.0f, 1.0f);  // Random scatter
+        }
+    }
   }
 
   inline void setParameter(uint8_t index, int32_t value) {
@@ -514,8 +497,9 @@ class Effect {
 
     case DEPTH:
       // Single digit base-10 fractional value, bipolar dry/wet
-      value = clipminmaxi32(-1000, value, 1000);
-      params_.depth = value / 1000.f; // -100.0 .. 100.0 -> -1.0 .. 1.0
+      value = clipminmaxi32(0, value, 1000);
+      params_.depth = param_10bit_to_f32(value); // 0 .. 1000 -> 0.0 .. 1.0
+      updateGrainPanning();
       break;
 
     case PITCHMODE:
@@ -555,20 +539,23 @@ class Effect {
 
     case DEPTH:
       // Single digit base-10 fractional value, bipolar dry/wet
-      return (int32_t)(params_.depth * 1000);
+      return param_f32_to_10bit(params_.depth);
       break;
 
     case PITCHMODE:
       // strings type parameter, return index value
       return params_.param4;
+      break;
 
     case PLAYMODE:
       // strings type parameter, return index value
       return params_.param5;
+      break;
 
     case DRIFT:
       // strings type parameter, return index value
       return params_.param6;
+      break;
       
     default:
       break;
@@ -632,16 +619,16 @@ class Effect {
     switch (phase) 
     {
       case k_unit_touch_phase_began:
-        // Only randomise L/R playheads if recording is started in the upper-right two thirds of the touchpad
-        shouldRandomise = (x >= 341) && (y >= 512);
+        // Only add octave chance if recording is started in the upper-right two thirds of the touchpad
+        shouldRandomise = (x >= 682) && (y >= 512);
         // Only enable granular if recording is started in the upper-right one third of the touchpad
-        if((x >= 682) && (y >= 512))
+        if((x >= 341) && (y >= 512))
         {
           grainModeEnabled = true;
         }
         // Only disable grain mode if one of the other modes was initiated (so the lower half can be 
         // repeatedly touched for pitch changes without disabling grain mode)
-        if((x < 682) && (y >= 512))
+        if((x < 341) && (y >= 512))
         {
           grainModeEnabled = false;
         }
