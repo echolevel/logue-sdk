@@ -3,6 +3,11 @@
 
  See and hear it on [youtube](https://www.youtube.com/watch?v=6W8OzDvJrg0)
 
+## Download
+Get [echolevel_loopitch.zip](echolevel_loopitch.zip) and unzip.
+
+Or...
+
 ## Build
 Set up Docker environment as detailed in logue-sdk docs. From logue-sdk env command line, run 
 
