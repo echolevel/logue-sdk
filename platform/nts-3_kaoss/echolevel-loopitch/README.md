@@ -1,6 +1,8 @@
 # echolevel-loopitch
  Pitch adjustable looper effect for Korg NTS-3 Kaoss Pad
 
+ See and hear it on [youtube](https://www.youtube.com/watch?v=6W8OzDvJrg0)
+
 ## Build
 Set up Docker environment as detailed in logue-sdk docs. From logue-sdk env command line, run 
 
